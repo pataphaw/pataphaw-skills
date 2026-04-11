@@ -1,0 +1,4 @@
+interface:
+  display_name: "Git Publish"
+  short_description: "整理改动、拆分提交、推送并创建 PR"
+  default_prompt: "Use $git-publish to analyze my current git changes, split them into clean commits, push the branch, and open a PR to main."
