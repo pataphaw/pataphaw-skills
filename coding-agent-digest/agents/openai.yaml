@@ -1,0 +1,4 @@
+interface:
+  display_name: "Coding Agent 日报"
+  short_description: "精选每日 coding agent 资讯并生成中文日报"
+  default_prompt: "Use $coding-agent-digest to generate yesterday’s concise Chinese coding agent news digest."
