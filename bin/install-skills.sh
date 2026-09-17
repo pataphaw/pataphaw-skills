@@ -20,18 +20,20 @@ Options:
 
 Defaults:
   agents: codex, claude, opencode
-  codex target: ${CODEX_HOME:-$HOME/.codex}/skills
+  codex target: $HOME/.agents/skills
   claude target: ${CLAUDE_HOME:-$HOME/.claude}/skills
   opencode target: ${OPENCODE_HOME:-$HOME/.config/opencode}/skills
 
 Notes:
   mode: symlink
+  CODEX_HOME does not change the Codex skills target; use --target instead.
+  Move matching skills out of ~/.codex/skills before installing for Codex.
 EOF
 }
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
-CODEX_TARGET_ROOT=${CODEX_HOME:-"$HOME/.codex"}/skills
+CODEX_TARGET_ROOT="$HOME/.agents/skills"
 CLAUDE_TARGET_ROOT=${CLAUDE_HOME:-"$HOME/.claude"}/skills
 OPENCODE_TARGET_ROOT=${OPENCODE_HOME:-"$HOME/.config/opencode"}/skills
 MODE=symlink
@@ -134,6 +136,24 @@ fi
 
 if [ "$AGENT_OVERRIDE" -ne 1 ]; then
   SELECTED_AGENTS="codex claude opencode"
+fi
+
+# Fail before installing to any agent if Codex would discover an old copy too.
+if [ -z "$CUSTOM_TARGET_ROOT" ] && has_agent codex; then
+  legacy_conflicts=0
+  for skill_path in "$REPO_ROOT"/*; do
+    [ -d "$skill_path" ] && [ -f "$skill_path/SKILL.md" ] || continue
+    skill_name=$(basename "$skill_path")
+    legacy_path="$HOME/.codex/skills/$skill_name"
+    if [ -e "$legacy_path" ] || [ -L "$legacy_path" ]; then
+      echo "error: legacy Codex skill still exists: $legacy_path" >&2
+      legacy_conflicts=1
+    fi
+  done
+  if [ "$legacy_conflicts" -ne 0 ]; then
+    echo "hint: migrate these skills to $CODEX_TARGET_ROOT first; --force does not remove legacy skills" >&2
+    exit 1
+  fi
 fi
 
 installed_count=0
