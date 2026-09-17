@@ -11,9 +11,9 @@ sh bin/install-skills.sh
 ```
 
 By default it installs every top-level skill in this repository into each
-agent's own global skills directory:
+agent's global skills directory:
 
-- Codex: `~/.codex/skills`
+- Codex: `~/.agents/skills`
 - Claude Code: `~/.claude/skills`
 - OpenCode: `~/.config/opencode/skills`
 
@@ -60,3 +60,12 @@ sh bin/install-skills.sh --target /path/to/skills
 - `--target` overrides the built-in agent directories and cannot be combined
   with `--agent`
 - The installer only picks top-level directories that contain `SKILL.md`
+- Codex installation uses `~/.agents/skills` independently of `CODEX_HOME`.
+  Use `--target` for a custom location.
+- Before installing for Codex, migrate any matching skills from the legacy
+  `~/.codex/skills` directory. The installer stops before writing to any agent
+  if legacy entries would cause duplicate installations; `--force` does not
+  remove them. Existing destination conflicts still require explicit handling.
+- Codex may recreate `~/.codex/skills/.system` for its bundled skills after
+  the legacy directory is removed. This does not mean your migrated user
+  skills have moved back; the installer does not manage bundled skills.
