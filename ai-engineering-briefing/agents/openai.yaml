@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI & Engineering Briefing"
+  short_description: "精选值得持续关注的 AI 与工程技术动态，生成高信息密度的中文简报"
+  default_prompt: "使用 $ai-engineering-briefing 生成最近 24 小时的中文 AI 与工程技术简报，默认精选 5 条，重点解释变化及工程影响，宁缺毋滥。"
