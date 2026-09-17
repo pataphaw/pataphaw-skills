@@ -1,4 +1,4 @@
 interface:
   display_name: "Refresh"
-  short_description: "检查本地 git 状态，先询问风险操作，再同步 main 或 master"
-  default_prompt: "Use $refresh to inspect the current git workspace, ask before touching local or unpushed changes, and update main/master only when the repo is clean."
+  short_description: "核对最新远端及当前与目标分支，保护本地工作后快进同步主分支"
+  default_prompt: "使用 $refresh 刷新当前仓库：先 fetch 核对当前分支和目标分支，保护本地改动与提交，再切回 main 或 master 并仅快进更新；需要处置本地工作时再询问。"

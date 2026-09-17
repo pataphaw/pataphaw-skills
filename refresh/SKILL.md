@@ -1,40 +1,60 @@
 ---
 name: refresh
-description: 刷新当前工作区对应的 git 仓库。Use when the user asks to refresh, sync, update, or pull the current workspace, or wants to switch back to `main` / `master` before syncing. First inspect whether the repo has uncommitted changes, untracked files, unfinished git operations, missing upstream, or unpushed commits; if any of these exist, stop and ask the user how to proceed. Only when the repo is clean, switch to `main` or `master` and pull the latest code from remote.
+description: 安全刷新当前 Git 仓库：先 fetch 核对最新远端状态，检查当前分支和目标分支，默认切回 main 或 master 并仅快进更新。用于用户要求刷新、同步仓库或切回主分支拉取更新；遵循明确指定的分支和远端，遇到需要处置本地工作的情况再询问。
 ---
 
 # Refresh
 
-按“先检查，再同步”的顺序执行。不要跳过检查。
+先检查本地状态并获取最新远端引用，再决定是否切换和更新。默认目标为 `main`，不存在时使用 `master`；用户明确要求更新当前分支、其他分支或指定远端时遵循其要求。
+
+fetch 只更新远端引用，不改工作区内容。切分支和更新前必须保护本地工作；用户已经明确授权的处理方式无需重复确认。
 
 ## 工作流
 
-### 1. 先检查当前仓库
-- 先运行 `git status -sb`。
-- 必要时补充运行：
-  - `git rev-parse --abbrev-ref HEAD`
-  - `git rev-parse --abbrev-ref --symbolic-full-name @{u}`（允许失败）
-- 把下面情况都视为“先停下来问用户”：
-  - 有已修改、已暂存、未跟踪文件。
-  - 有 merge、rebase、cherry-pick 等未完成状态。
-  - 当前分支领先 upstream，存在未推送提交。
-  - 当前分支没有 upstream，无法确认是否已全部推送。
+### 1. 检查本地状态并确定同步目标
 
-### 2. 有本地风险时先询问
-- 不要自动 `stash`、`commit`、`push`、`reset`、`checkout -f`。
-- 简洁展示现状，并直接问用户想怎么处理。
-- 在用户明确前，不进入切分支和拉取步骤。
+- 运行 `git status -sb`，检查已修改、已暂存、未跟踪文件，当前分支或 detached HEAD 状态，以及未完成的 merge、rebase、cherry-pick 等操作。
+- 检查 remote、分支 upstream 和 `git worktree list`，同时确认当前分支与准备更新的目标分支。
+- 用户指定的分支和远端优先。否则，结合目标分支的 upstream 选择远端；没有明确配置时优先 `origin`，多个候选存在歧义时再询问。
+- 默认目标的选择同时考虑本地和远端：本地或选定远端存在 `main` 时优先使用它，都不存在才退回 `master`。不要因为本地仅有 `master`，就忽略远端已有的 `main`。远端分支是否存在需在获取最新信息后确认。
+- 若缺少所需远端或目标分支，说明缺失项，不猜测替代仓库或创建无依据的分支。
 
-### 3. 仓库干净时切默认分支
-- 优先使用 `main`；本地没有 `main` 时退回 `master`。
-- 如果本地分支不存在，但 `origin/main` 或 `origin/master` 存在，创建跟踪分支再切换。
-- 两者都不存在时，明确报告缺少默认分支并停止。
-- 优先使用 `git switch`，避免旧式 `checkout`。
+### 2. 获取最新远端状态
 
-### 4. 拉取最新代码
-- 切到目标分支后，运行 `git pull --ff-only`。
-- 如果拉取失败，直接报告阻塞原因，不要自动做 rebase、merge 或强制覆盖。
+- fetch 当前分支 upstream 所在远端及目标远端；同一远端只需获取一次。即使工作区有改动，也可先完成这一步和后续只读检查，再提出具体处理问题。
+- 检查 fetch 是否成功，以及本次查询到的目标远端分支是否仍存在；不要把残留的 remote-tracking ref 当作远端分支仍存在的证据。必要时用 `git ls-remote` 核实。
+- 若网络或权限问题导致获取失败，说明只能看到本地缓存，停止依赖最新远端状态的切换和更新，不报告已同步。
+
+### 3. 同时判断当前分支和目标分支
+
+- 对当前分支，比较其 HEAD 与最新 upstream，区分仅本地领先、仅远端领先、双方分叉和一致；需要时用 `git rev-list --left-right --count <local>...<remote-ref>` 核对。
+- upstream 缺失不等于存在未推送提交。检查选定远端的同名分支及提交可达性；若仍无法确认当前工作已保存到远端，再询问。不要为了消除提示而随意设置 upstream。
+- 另外比较当前分支与目标分支，区分“尚未推送”和“已推送但尚未合入”。判断是否已合入时考虑 squash 或 cherry-pick 后的等价补丁与文件差异，不只看 SHA；文件内容相同也不能用来声称提交历史已推送。
+- 已推送但未合入的特性分支可保留并切回主分支，只需说明仍有未合入工作，不自动合并或删除它。
+- 对本地目标分支也检查其与选定远端目标的关系。目标有本地独有提交或已分叉时，不因当前分支干净就直接更新；也不把 `pull` 返回“already up to date”当作本地与远端完全一致。
+- 目标分支被另一个 worktree 占用时，不强行重复检出，不修改另一个 worktree。说明占用位置；处理方式尚未明确时询问。
+
+### 4. 只对待处理的本地工作询问
+
+以下情况若没有已有授权的处理方式，先报告具体文件、分支或操作状态，再询问：
+
+- 有已修改、已暂存或未跟踪文件，需要确定是保留、暂存保存还是提交后再更新。
+- 有未完成的 Git 操作，或 detached HEAD 上的工作尚未确认如何保留。
+- 当前分支有未推送提交，或无法确认本地工作是否已保存到远端。
+- 目标分支有本地独有提交、分叉、upstream 与请求目标冲突，或被其他 worktree 占用。
+
+没有授权时，不自动 stash、commit、push、reset、clean、强制切换或改写历史。用户明确要求保留特性分支的未推送提交并切回主分支时，可以保留该分支继续操作，不重复要求先推送。临时保存改动的方案应说明如何恢复；不要默认把特性分支的改动恢复到主分支。
+
+提出问题前完成可进行的 fetch 和只读检查，集中报告需要决定的事项。获得答复后只复查受影响的状态，沿用已有授权继续执行。
+
+### 5. 切换并仅快进更新
+
+- 确认本地工作已妥善保留、工作区满足切换条件、目标分支可安全更新后，用 `git switch` 切换；本地目标不存在时，从已确认的远端目标创建跟踪分支。
+- 在目标分支运行 `git pull --ff-only <remote> <branch>`，显式使用前面核对过的远端和分支，避免拉取到其他 upstream。
+- 若失败，检查并报告原因，不自动 rebase、创建 merge commit 或强制覆盖。操作期间状态发生变化时重新评估，不绕过快进限制。
+- 完成后复查 `git status -sb`、当前分支和 HEAD，与此次拉取的远端目标提交比较，确认同步结果，并说明任何按用户要求保留的本地状态。
 
 ## 输出
-- 如果中途停止：说明停在哪一步、发现了什么、正在等用户决定什么。
-- 如果刷新成功：说明最终分支，以及是否已成功拉取最新代码。
+
+- 成功时：说明最终分支、同步的远端分支、更新前后的短 SHA 或“本来已是最新”，以及保留的未合入工作或临时保存的改动。
+- 中途停止时：区分“已 fetch”与“已更新工作区”，说明阻塞点、已经执行的操作，以及还需要用户决定什么。不把仅更新远端引用称为仓库刷新完成。
